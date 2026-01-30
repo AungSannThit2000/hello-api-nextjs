@@ -9,6 +9,12 @@ export async function OPTIONS(req) {
     });
 }
 export async function GET() {
+    const headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        ...corsHeaders
+    }
     try {
         const client = await getClientPromise();
         const db = client.db("wad-01");
