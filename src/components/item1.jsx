@@ -58,7 +58,7 @@ export function Items() {
                         <th>Name</th>
                         <th>Category</th>
                         <th>Price</th>
-                        <th></th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
