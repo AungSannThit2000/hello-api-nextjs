@@ -73,6 +73,11 @@ export default function Profile() {
             }
             <br />
 
+            <Link to="/users">
+                <button>Go to User Management</button>
+            </Link>
+            <br />
+
             <Link to="/logout">
                 <button>Logout</button>
             </Link>
