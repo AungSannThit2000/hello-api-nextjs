@@ -1,6 +1,6 @@
-import { getUserFilterFromToken, verifyJWT } from "@/lib/auth";
 import corsHeaders from "@/lib/cors";
 import { getClientPromise } from "@/lib/mongodb";
+import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
@@ -13,17 +13,17 @@ const ALLOWED_IMAGE_TYPES = {
   "image/webp": "webp",
 };
 
-export async function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
-}
-
-async function parseMultipartFormData(req) {
-  const contentType = req.headers.get("content-type") || "";
-  if (!contentType.startsWith("multipart/form-data")) {
-    throw new Error("Invalid content-type");
+function normalizeId(id) {
+  if (!id) return { filter: null };
+  const clean = id.toString().trim();
+  if (ObjectId.isValid(clean)) {
+    return { filter: { _id: new ObjectId(clean) } };
   }
-  const formData = await req.formData();
-  return formData;
+  const match = clean.match(/[a-fA-F0-9]{24}/);
+  if (match && ObjectId.isValid(match[0])) {
+    return { filter: { _id: new ObjectId(match[0]) } };
+  }
+  return { filter: { _id: clean } };
 }
 
 function getNewImageName(mimeType) {
@@ -39,23 +39,32 @@ function getPublicImagePath(imageUrl) {
   return path.join(process.cwd(), "public", relativePath);
 }
 
-export async function POST(req) {
-  const tokenPayload = verifyJWT(req);
-  if (!tokenPayload) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401, headers: corsHeaders });
+async function parseMultipartFormData(req) {
+  const contentType = req.headers.get("content-type") || "";
+  if (!contentType.startsWith("multipart/form-data")) {
+    throw new Error("Invalid content-type");
   }
+  return req.formData();
+}
 
-  const userFilter = getUserFilterFromToken(tokenPayload);
-  if (!userFilter) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401, headers: corsHeaders });
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
+}
+
+export async function POST(req, { params }) {
+  const { id } = await params;
+  const { filter } = normalizeId(id);
+  if (!filter) {
+    return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
   }
 
   let formData;
   try {
     formData = await parseMultipartFormData(req);
-  } catch (err) {
+  } catch (_error) {
     return NextResponse.json({ message: "Invalid form data" }, { status: 400, headers: corsHeaders });
   }
+
   const file = formData.get("file");
   if (!file || typeof file === "string") {
     return NextResponse.json({ message: "No file uploaded" }, { status: 400, headers: corsHeaders });
@@ -76,7 +85,7 @@ export async function POST(req) {
     const client = await getClientPromise();
     const db = client.db("wad-01");
 
-    const currentUser = await db.collection("user").findOne(userFilter);
+    const currentUser = await db.collection("user").findOne(filter);
     if (!currentUser) {
       return NextResponse.json({ message: "User not found" }, { status: 404, headers: corsHeaders });
     }
@@ -93,40 +102,36 @@ export async function POST(req) {
     await fs.writeFile(savePath, Buffer.from(arrayBuffer));
 
     await db.collection("user").updateOne({ _id: currentUser._id }, { $set: { profileImage: imageUrl } });
-  } catch (err) {
-    return NextResponse.json({ message: "Failed to store image" }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ imageUrl }, { status: 200, headers: corsHeaders });
+  } catch (error) {
+    return NextResponse.json({ message: error.toString() }, { status: 500, headers: corsHeaders });
   }
-
-  return NextResponse.json({ imageUrl }, { status: 200, headers: corsHeaders });
 }
 
-export async function DELETE(req) {
-  const tokenPayload = verifyJWT(req);
-  if (!tokenPayload) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401, headers: corsHeaders });
-  }
-
-  const userFilter = getUserFilterFromToken(tokenPayload);
-  if (!userFilter) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401, headers: corsHeaders });
+export async function DELETE(_req, { params }) {
+  const { id } = await params;
+  const { filter } = normalizeId(id);
+  if (!filter) {
+    return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
   }
 
   try {
     const client = await getClientPromise();
     const db = client.db("wad-01");
 
-    const currentUser = await db.collection("user").findOne(userFilter);
+    const currentUser = await db.collection("user").findOne(filter);
     if (!currentUser) {
       return NextResponse.json({ message: "User not found" }, { status: 404, headers: corsHeaders });
     }
 
     if (currentUser.profileImage) {
-      const filePath = getPublicImagePath(currentUser.profileImage);
-      if (filePath) {
-        await fs.rm(filePath, { force: true });
+      const oldFilePath = getPublicImagePath(currentUser.profileImage);
+      if (oldFilePath) {
+        await fs.rm(oldFilePath, { force: true });
       }
-      await db.collection("user").updateOne({ _id: currentUser._id }, { $set: { profileImage: null } });
     }
+
+    await db.collection("user").updateOne({ _id: currentUser._id }, { $set: { profileImage: null } });
     return NextResponse.json({ message: "OK" }, { status: 200, headers: corsHeaders });
   } catch (error) {
     return NextResponse.json({ message: error.toString() }, { status: 500, headers: corsHeaders });

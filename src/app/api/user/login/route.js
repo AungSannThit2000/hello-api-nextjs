@@ -1,10 +1,8 @@
 import corsHeaders from "@/lib/cors";
 import { getClientPromise } from "@/lib/mongodb";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import { signJWT } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-const JWT_SECRET = process.env.JWT_SECRET || "mydefaultjwtsecret";
 
 export async function OPTIONS() {
   return new Response(null, { status: 200, headers: corsHeaders });
@@ -27,9 +25,7 @@ export async function POST(req) {
     if (!passwordMatch) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401, headers: corsHeaders });
     }
-    const token = jwt.sign({ id: user._id, email: user.email, username: user.username }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = signJWT({ id: user._id.toString(), email: user.email, username: user.username });
     const response = NextResponse.json({ message: "Login successful" }, { status: 200, headers: corsHeaders });
     response.cookies.set("token", token, {
       httpOnly: true,

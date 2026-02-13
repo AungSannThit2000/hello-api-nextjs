@@ -22,7 +22,7 @@ export async function OPTIONS() {
 }
 
 export async function GET(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
   const { filter } = normalizeId(id);
   if (!filter) {
     return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
@@ -43,7 +43,7 @@ export async function GET(req, { params }) {
 }
 
 export async function PATCH(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
   const { filter } = normalizeId(id);
   if (!filter) {
     return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
@@ -70,7 +70,7 @@ export async function PATCH(req, { params }) {
 }
 
 export async function PUT(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
   const { filter } = normalizeId(id);
   if (!filter) {
     return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
@@ -97,7 +97,7 @@ export async function PUT(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
   const { filter } = normalizeId(id);
   if (!filter) {
     return NextResponse.json({ message: "Invalid user id" }, { status: 400, headers: corsHeaders });
